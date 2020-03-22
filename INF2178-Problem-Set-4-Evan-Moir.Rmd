@@ -1,0 +1,529 @@
+---
+title: "3-year Recidivism Rates in Parole and Non-Parole Samples of Iowa Prisoners"
+author: "Evan Moir"
+date: "22/03/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(broom)
+library(dplyr)
+library(knitr)
+```
+
+## Abstract
+
+Using parole as a treatment compared to a non-paroled control group, 3-year recidivism rates were studied in a set of Iowa prisoners released from 2010 to 2012. Using a chi-squared test, it was shown that there is a significant increase in recidivism in the parole group over the non-parole group. While there are challenges to the internal and external validity of this analysis, it should indicate to justice and prison systems that further study may be needed to understand the relationship between parole and recidivism.
+
+## Introduction
+
+The question of how to reduce recidivism in prisoners is of significant interest to those who study justice and prison systems. Reducing recidivism means reducing both the costs associated with prison systems, and the social impact on the victims of crimes, the families of prisoners, and prisoners themselves. This analysis approaches the question of what factors affect recidivism by investigating the role of parole - are paroled prisoners more or less likely to be recidivists, and if so is the difference significant?
+
+## The Dataset
+
+```{r load_data, include=FALSE}
+recidivism_data <- read.csv("3-Year_Recidivism_for_Offenders_Released_from_Prison_in_Iowa.csv")
+names(recidivism_data)[names(recidivism_data) == "Return.to.Prison"] <- "recidivist"
+names(recidivism_data)[names(recidivism_data) == "Race...Ethnicity"] <- "ethnicity"
+names(recidivism_data)[names(recidivism_data) == "Convicting.Offense.Classification"] <- "offense_class"
+names(recidivism_data)[names(recidivism_data) == "Offense.Type"] <- "offense_type"
+names(recidivism_data)[names(recidivism_data) == "Offense.Subtype"] <- "offense_subtype"
+names(recidivism_data)[names(recidivism_data) == "Main.Supervising.District"] <- "district"
+names(recidivism_data)[names(recidivism_data) == "Release.Type"] <- "release_type"
+names(recidivism_data)[names(recidivism_data) == "Age.At.Release"] <- "age"
+names(recidivism_data)[names(recidivism_data) == "Fiscal.Year.Released"] <- "release_year"
+names(recidivism_data)[names(recidivism_data) == "Sex"] <- "sex"
+```
+
+The chosen dataset gives 3-year recidivism for 26,020 prisoners in Iowa released during their prison system's 2010-2015 fiscal years. 3-year recidivism  means, e.g., if the prisoner was released in 2011, a follow-up was done in 2014 to see if they'd been readmitted to prison at any point since release. The dataset is provided by the Government of Iowa and was originally found on Kaggle - links to both webpages are in the appendix.
+
+The dataset contains the following variables of interest. Most were renamed from their original names for convenience.
+
+* A boolean capturing whether the prisoner was re-admitted to prison within three years after their 2010 release (recidivist)
+* The manner of their release: Parole, Special Sentence, Discharged at End of Sentence (release_type)
+* The year of release (release_year)
+* The prisoner's ethnicity (ethnicity)
+* The prisoner's age range at release (age)
+* The prisoner's sex (sex)
+* The type of the original convicted offense (offense_type)
+
+Visualizations of the distributions of these key variables of interest can be found in the *Internal Validity* section below. 
+
+## Research Question
+
+The goal of this analysis is to determine if the manner of a prioner's release has an effect on their probability of recidivism. There are three types of release (Parole, Special Sentence, Discharged at End of Sentence), so there are several possible ways to set up an A/B test. Three dummy variables were created to determine how to best split the sample:
+
+* parole (release_type == "Parole")
+* full_sentence (release_type == "Discharged End of Sentence")
+* special_sentence (release_type == "Special Sentence")
+
+```{r define_groups, include=FALSE}
+# define parole, full_sentence and special sentence dummy variables
+recidivism_data <- recidivism_data %>%
+  mutate(parole = ifelse(release_type == "Parole", 1, 0))
+
+recidivism_data <- recidivism_data %>%
+  mutate(full_sentence = ifelse(release_type == "Discharged End of Sentence", 1, 0))
+
+recidivism_data <- recidivism_data %>%
+  mutate(special_sentence = ifelse(release_type == "Special Sentence", 1, 0))
+```
+
+The size of the samples for these splits will determine which are suitable for an A/B test:
+
+``` {r split_sizes, include=FALSE}
+count(recidivism_data, parole == 1)
+count(recidivism_data, full_sentence == 1)
+count(recidivism_data, special_sentence == 1)
+```
+
+The parole / no parole split is the only one with comparable sample sizes between the two groups. So the broad research question becomes: "What is the effect of parole being granted on 3-year recidivism rates?" Or, more precisely:
+
+**Null hypothesis:** there is no significant difference in 3-year recidivism rates between prisoners granted parole and those not granted parole.
+
+**Hypothesis:** there is a statistically significant difference in 3-year recidivism rates between prisoners granted parole and those not granted parole.
+
+In this scenario parole is being used as a treatment, with non-paroled prisoners as the control.
+
+## Preprocessing
+
+To ensure clean data, blank values were transformed into NAs, and rows with NAs in the following variables of interest were removed: recidivist, age, ethnicity, sex, offense_type, and year_of_release. No NAs were found in these variables.
+
+```{r clean_NAs, include=FALSE}
+# turn missing and false NA values into NAs, then remove NAs
+recidivism_data[recidivism_data == ""] <- NA
+recidivism_data[recidivism_data == "N/A -"] <- NA
+drop_na(recidivism_data, recidivist, release_type, age, sex, ethnicity, offense_type)
+```
+
+However, the ethnicity variable contained some ambiguous values, e.g. "White - Hispanic" and "White - Non-Hispanic", but also "White - ". To counter this, observations with ambiguous values (e.g."White - ") were removed from the dataset. This brought the dataset down to 25,971 rows.
+
+```{undefined include=FALSE}
+# Remove unclear ethnicity values
+recidivism_data <- subset(recidivism_data, ethnicity != "White -" )
+recidivism_data <- subset(recidivism_data, ethnicity != "Black -" )}
+```
+
+## Internal Validity
+
+To attempt to establish internal validity, it's important to show that the two groups are similar along the other dimensions of interest in the dataset. This can be done visually, by comparing the parole and non-parole groups side by side.
+
+**Release Year:** It would be ideal to have identical distributions for release year between the two groups, as there may have been policy changes regarding parole, or even new laws that made recidivism more or less likely - but these are unknown to us without significant research and resources.
+
+```{r release_plot, echo=FALSE, fig.height=3}
+# distribution: release year
+recidivism_data$release_year <- as.factor(recidivism_data$release_year)
+
+ggplot(data = recidivism_data) +
+  geom_bar(
+    mapping = aes(x = parole, fill = release_year),
+    position = "fill"
+    ) +
+  labs(
+    title = "Figure 1: Release year distribution for non-parole and parole groups",
+    x = "Parole Granted (No / Yes)",
+    y = "Proportion of sample"
+    ) +
+  theme_minimal()
+```
+
+There is cause for concern here: the two groups only share the years 2010-2012. By keeping only the years shared by both groups (2010-2012), this concern can be sidestepped at the cost of a smaller *but still acceptably large) sample. This leaves 12,327 rows in total, with the following split:
+* Non-parole: 5,387
+* Parole: 6,986
+
+The resulting distribution in release_year is much more acceptable.
+
+```{r remove_year, include=FALSE}
+recidivism_data <- recidivism_data <- filter(recidivism_data, release_year == "2010" | release_year == "2011" | release_year == "2012")
+
+```
+
+```{r release_plot_2, echo=FALSE, fig.height=3}
+# distribution: release year
+recidivism_data$release_year <- as.factor(recidivism_data$release_year)
+
+ggplot(data = recidivism_data) +
+  geom_bar(
+    mapping = aes(x = parole, fill = release_year),
+    position = "fill"
+    ) +
+  labs(
+    title = "Figure 2: Final release year distribution for non-parole and parole groups",
+    x = "Parole Granted (No / Yes)",
+    y = "Proportion of sample"
+    ) +
+  theme_minimal()
+```
+
+**Age:** Similar distributions here are important here, as there may be age-related bias inherent in the justice/prison system.
+
+```{r age_plot, echo=FALSE, fig.height=3}
+# distribution: age
+ggplot(data = recidivism_data) +
+    geom_bar(
+        mapping = aes(x = parole, fill = age),
+        position = "fill"
+        ) + 
+    labs(
+        title = "Figure 3: Age distribution for non-parole and parole groups",
+        x = "Parole Granted (No / Yes)",
+        y = "Proportion of sample"
+        ) +
+    theme_minimal()
+```
+
+These distributions are very close, with small but acceptable differences the *Under 25* and *35-44* categories.
+
+**Ethnicity:** Similar distributions here are important, as there may be ethnicity-centred biases inherent in the justice/prison system and the decision-making of the individuals therein.
+
+```{r ethnicity_plot, echo=FALSE, fig.height=4}
+# distribution: ethnicity
+ggplot(data = recidivism_data) +
+  geom_bar(
+    mapping = aes(x = parole, fill = ethnicity),
+    position = "fill"
+    ) + 
+  labs(
+    title = "Figure 4: Ethnicity distribution for non-parole and parole groups",
+    x = "Parole Granted (No / Yes)",
+    y = "Proportion of sample"
+    ) +
+  theme_minimal()
+```
+
+These distributions are also quite close, with small but acceptable differences mainly in the *White - Non-Hispanic* and *Black - Non-Hispanic* categories. 
+
+```{r sex_plot, echo=FALSE, fig.height=3}
+# distribution: sex
+ggplot(data = recidivism_data) +
+  geom_bar(
+    mapping = aes(x = parole, fill = sex),
+    position = "fill"
+  ) + 
+  labs(
+    title = "Figure 5: Sex distribution for non-parole and parole groups",
+    x = "Parole Granted (No / Yes)",
+    y = "Proportion of sample"
+  ) +
+  theme_minimal()
+```
+
+Here we see a small but acceptable difference between the sex distributions.
+
+**Offense Type:** 
+
+```{r offense_plot, echo=FALSE, fig.height=3}
+# distribution: offense_type
+ggplot(data = recidivism_data) +
+  geom_bar(
+      mapping = aes(x = parole, fill = offense_type), 
+      position = "fill"
+      ) + 
+  labs(
+    title = "Figure 6: Offense type distribution for non-parole and parole groups",
+    x = "Parole Granted (No / Yes)",
+    y = "Proportion of sample"
+    ) +
+  theme_minimal()
+```
+
+There is cause for concern here. There are significant differences in the proportion of drug and violent crime offences in the two groups. This is the largest threat to internal validity. The impact of this on the analysis will be elaborated on in the *Discussion* section. 
+
+## Analysis
+
+Recidivism rate is calculated by:
+
+$$
+R = n_{recidivist} / n_{sample}
+$$
+Rates for the two groups  are summarized in Table 1.
+
+```{r recid_rates, echo=FALSE}
+# calculate recidivism rate for parole vs non-parole groups
+
+# calulate for parole group
+parole <- filter(recidivism_data, parole == 1)
+parole_recidivist <- filter(parole, recidivist == "Yes")
+
+n_parole <- nrow(parole)
+n_parole_recividist <- nrow(parole_recidivist)
+
+recid_rate_parole <- round((n_parole_recividist / n_parole), digits = 3)
+
+# calculate for non-parole group
+no_parole <- filter(recidivism_data, parole == 0)
+no_parole_recidivist <- filter(no_parole, recidivist == "Yes")
+
+n_no_parole <-nrow(no_parole)
+n_no_parole_recidivist <- nrow(no_parole_recidivist)
+
+recid_rate_no_parole <- round((n_no_parole_recidivist / n_no_parole), digits = 3)
+
+summary <- data.frame(recid_rate_no_parole, recid_rate_parole)
+summary <- mutate(summary, delta = recid_rate_parole - recid_rate_no_parole)
+kable(summary, caption = "Recidivism rates for non-parole and parole groups", col.names = c("Non-parole", "Parole", "Delta"))
+```
+
+This suggests that paroled prisoners have a higher recidivism rate than non-paroled prisoners. But is this difference significant? To answer this, a chi-squared test is performed using the parole variable as the treatment and recidivism as the outcome variables. The chi-squared test compares the observed frequencies of recidivism in the two groups to their expected frequencies to evaluate how likely the observed frequencies would be assuming the null hypothesis is true.
+
+```{r chi_test, eval=FALSE, include=FALSE}
+# chi squared test
+chisq.test(recidivism_data$parole, recidivism_data$recidivist)
+```
+
+The chi-squared test resulted in:
+
+* chi-squared: 84.99
+* p value < 2.2 * 10^-22. 
+
+Using the standard practice of considering p = 0.05 thecut off for significance, the null hypothesis is rejected: there is a statistically significant increase in 3-year recidivism rates in the parole group over the non-parole group.
+
+For some additional insight, recidivism rates for the levels of each of the variables of interest was also calculated. However it should be noted that further splitting the groups into subgroups based on these variables likely invalidates the assumption that the subgroups are relatively homogenous. Appendix B summarizes these findings for interest's sake.
+
+## Discussion
+
+The analysis above led to the null hypothesis being rejected, i.e. a statistically significant increase in 3-year recidivism rates in the parole group over the non-parole group was found. This suggests that parolees are at higher risk for recidivism compared to prisoners serving their full sentence. The reasons for this are not well understood, but it may be because parole sends the signal that crimes 
+
+That said, there was one significant concern regarding internal validity: the distribution of offense types of the two groups were not comparable. This is a weakness of the analysis, as the type of offense can affect both the probability of parole and the probability of recidivism (and possibly other aspects in the experiment context as well).
+
+### External Validity
+
+Given that this data represents only a few years' worth of prisoners from a single prison system in the United States, it's hard to argue that this analysis has strong external validity. There are many possible factors that affect the probability of a prisoner re-committing crime, some of which are related to the justice/prison system itself, and others to the society at large. For instance, prisoners in a system more focused on rehabilitation, or without the proft motive found in the US prison system, may have different results. 
+
+There are also a number factors to consider regarding the personal circumstances of the parolee, e.g.: do they have employment and a social support network? These factors have the potential to play a large role in determining individual outcomes, but were not considered in this analysis.
+
+A follow-up analysis seeking to improve internal and external validity could focus on the following changes:
+
+* Restrict the number of offense types under consideration, e.g. exclude violent crimes.
+* Investigate jurisdiction-specific factors relating to how parole is granted. 
+* Measure aspects of parolees' personal employment situation and support network, e.g. what type of work and housing are available to them during parole.
+
+## Conclusion
+
+While it was shown that there was a statistically significant increase in recidivism among paroled prisoners for this dataset, there were concerns about internal validity, and it's difficult to generalize this result to other justice/prison systems due to the number of factors that can change between such systems. However, the result suggests that parolees may be at higher risk of recidivism than prisoners serving their full sentence of receiving special release conditions. More study is needed. 
+
+\newpage
+
+## Ethical Considerations
+
+There are significant ethical considerations anytime a prison system is discussed - prisoners are a vulnerable population at the mercy of the state, justice system and prison system they inhabit, and particularly justice systems are biased in ways that can't always be known without significant study. Particularly in the United States, where prison can be a for-profit venture, there are (arguably perverse) incentives that do not work in favour of the well-being or rehabilitation of prisoners.
+
+### Regarding the data itself
+
+The definition of the ethnicity categories is of significant concern. Ethnicity is a slippery concept that is not well defined biologically or in any socially universal sense - it tends to be vary significantly depending on the cultural context in which it's being discussed. For example: why are all of the categories appended with "hispanic" or "non-hispanic"? This speaks to a specifically American viewpoint of ethnicity. 
+
+Particularly given that backdrop, there are ethical considerations to even attempting to collect ethnicity as part of a dataset. It has the potential to bias anyone making decisions using the data.
+
+The same could be true of sex, e.g. male and female prisoners could be treated differently because of unknown biases on the part of the decision-makers. In addition, this dataset has a very binary view of sex. Even if sex is intended in the biological sense (rather than gender), the modern scientific view of sex is not a strict binary. It's unclear what there is to gain from including this as a variable.
+
+### Regarding experimental design
+
+Had an experiment using parole as treatment been carried out prior as part of the collection of the data, there would be significant ethical concerns regarding the fairness of making parole decisions for the purposes of the experiment rather than based on the behaviour and potential threat to society posed by the individuals themselves. Because this was a post-hoc analysis, those potential issues are sidestepped. But this speaks to one of the challenges of this type of study - balancing good and useful experiment design with the ethical considerations and treatment of individuals is a challenge all study designers need to wrestle with.
+
+\newpage
+
+## References
+
+* Wickham et al., (2019). Welcome to the tidyverse. Journal of Open Source Software, 4(43), 1686, [https://doi.org/10.21105/joss.01686](https://doi.org/10.21105/joss.01686)
+* David Robinson and Alex Hayes (2019). broom: Convert Statistical Analysis Objects into Tidy Tibbles. R package version 0.5.3. [https://CRAN.R-project.org/package=broom](https://CRAN.R-project.org/package=broom)
+* Hadley Wickham, Romain François, Lionel Henry and Kirill Müller (2020). dplyr: A Grammar of Data Manipulation. R package version 0.8.4.[https://CRAN.R-project.org/package=dplyr](https://CRAN.R-project.org/package=dplyr)
+* Yihui Xie (2019). knitr: A General-Purpose Package for Dynamic Report Generation in R. R package version 1.26.
+
+\newpage
+
+## Appendix A
+
+### The Dataset
+
+Courtesy of the Government of Iowa:
+[3-Year Recidivism for Offenders Released from Prison in Iowa](https://data.iowa.gov/Correctional-System/3-Year-Recidivism-for-Offenders-Released-from-Pris/mw8r-vqy4)
+
+Kaggle page where the dataset was originally found:
+[Recidivism for Offenders Released from Prison](https://www.kaggle.com/slonnadube/recidivism-for-offenders-released-from-prison#3-Year_Recidivism_for_Offenders_Released_from_Prison_in_Iowa_elaborated.csv)
+
+### Full script for reproducibility
+
+Link to GitHub repository:
+
+\newpage
+
+## Appendix B
+
+```{r sex_rates, echo=FALSE}
+# sex - parole
+n_parole_sex_m <- nrow(filter(parole, sex == "Male"))
+n_parole_sex_f <- nrow(filter(parole, sex == "Female"))
+
+recid_parole_m <- round((nrow(filter(parole, sex =="Male" & recidivist == "Yes")) / n_parole_sex_m), digits = 3)
+recid_parole_f <- round((nrow(filter(parole, sex == "Female" & recidivist == "Yes")) / n_parole_sex_f), digits = 3) 
+
+# sex - no parole
+n_no_parole_sex_m <- nrow(filter(no_parole, sex == "Male"))
+n_no_parole_sex_f <- nrow(filter(no_parole, sex == "Female"))
+
+recid_no_parole_sex_m <- round((nrow(filter(no_parole, sex =="Male" & recidivist == "Yes")) / n_no_parole_sex_m), digits = 3)
+recid_no_parole_sex_f <- round((nrow(filter(no_parole, sex =="Female" &  recidivist == "Yes")) / n_no_parole_sex_m), digits = 3)
+
+# sex - summary
+sex_rows <- c("Male", "Female")
+sex_no_parole_rates <- c(recid_no_parole_sex_m, recid_no_parole_sex_f)
+sex_parole_rates <- c(recid_parole_m, recid_parole_f)
+sex_summary <- data.frame(sex_rows, sex_no_parole_rates, sex_parole_rates)
+sex_summary <- mutate(sex_summary, delta = sex_parole_rates - sex_no_parole_rates)
+kable(sex_summary, caption = "Recidivism rates for non-parole / parole groups by sex", col.names = c("Sex", "No Parole", "Parole", "Delta"))
+```
+
+```{r release_year_rates, echo=FALSE}
+# release year - parole
+n_parole_release_year_2010 <- nrow(filter(parole, release_year == "2010"))
+n_parole_release_year_2011 <- nrow(filter(parole, release_year == "2011"))
+n_parole_release_year_2012 <- nrow(filter(parole, release_year == "2012"))
+
+recid_parole_2010 <- round((nrow(filter(parole, release_year == "2010" & recidivist == "Yes")) / n_parole_release_year_2010), digits = 3)
+recid_parole_2011 <- round((nrow(filter(parole, release_year == "2011" & recidivist == "Yes")) / n_parole_release_year_2011), digits = 3)
+recid_parole_2012 <- round((nrow(filter(parole, release_year == "2012" & recidivist == "Yes")) / n_parole_release_year_2012), digit = 3)
+
+# release year - no parole
+n_no_parole_release_year_2010 <- nrow(filter(no_parole, release_year == "2010"))
+n_no_parole_release_year_2011 <- nrow(filter(no_parole, release_year == "2011"))
+n_no_parole_release_year_2012 <- nrow(filter(no_parole, release_year == "2012"))
+
+recid_no_parole_2010 <- round((nrow(filter(no_parole, release_year == "2010" & recidivist == "Yes")) / n_no_parole_release_year_2010), digits = 3)
+recid_no_parole_2011 <- round((nrow(filter(no_parole, release_year == "2011" & recidivist == "Yes")) / n_no_parole_release_year_2011), digits = 3)
+recid_no_parole_2012 <- round((nrow(filter(no_parole, release_year == "2012" & recidivist == "Yes")) / n_no_parole_release_year_2012), digits = 3)
+
+# release year summary
+year_rows <- c("2010", "2011", "2012")
+year_no_parole_rates <- c(recid_no_parole_2010, recid_no_parole_2011, recid_no_parole_2012)
+year_parole_rates <- c(recid_parole_2010, recid_parole_2011, recid_parole_2012)
+year_summary <- data.frame(year_rows, year_no_parole_rates, year_parole_rates)
+year_summary <- mutate(year_summary, delta = year_parole_rates - year_no_parole_rates)
+kable(year_summary, caption = "Recidivism rates for non-parole / parole groups by release year", col.names = c("Release Year", "No Parole Group", "Parole Group", "Delta"))
+```
+
+```{r offense_type_rates, echo=FALSE}
+# offense type - parole
+n_parole_offense_drug <- nrow(filter(parole, offense_type == "Drug"))
+n_parole_offense_property <- nrow(filter(parole, offense_type == "Property"))
+n_parole_offense_public_order <- nrow(filter(parole, offense_type == "Public Order"))
+n_parole_offense_violent <- nrow(filter(parole, offense_type == "Violent"))
+n_parole_offense_other <- nrow(filter(parole, offense_type == "Other"))
+
+recid_parole_drug <- round((nrow(filter(parole, offense_type == "Drug" & recidivist == "Yes")) / n_parole_offense_drug), digits = 3)
+recid_parole_property <- round((nrow(filter(parole, offense_type == "Property" & recidivist == "Yes")) / n_parole_offense_property), digits = 3)
+recid_parole_public_order <- round((nrow(filter(parole, offense_type == "Public Order" & recidivist == "Yes")) / n_parole_offense_public_order), digits = 3)
+recid_parole_violent <- round((nrow(filter(parole, offense_type == "Violent" & recidivist == "Yes")) / n_parole_offense_violent), digits = 3)
+recid_parole_other <- round((nrow(filter(parole, offense_type == "Other" & recidivist == "Yes")) / n_parole_offense_drug), digits = 3)
+
+# offense_type - no parole
+n_no_parole_offense_drug <- nrow(filter(no_parole, offense_type == "Drug"))
+n_no_parole_offense_property <- nrow(filter(no_parole, offense_type == "Property"))
+n_no_parole_offense_public_order <- nrow(filter(no_parole, offense_type == "Public Order"))
+n_no_parole_offense_violent <- nrow(filter(no_parole, offense_type == "Violent"))
+n_no_parole_offense_other <- nrow(filter(no_parole, offense_type == "Other"))
+
+recid_no_parole_drug <- round((nrow(filter(no_parole, offense_type == "Drug" & recidivist == "Yes")) / n_no_parole_offense_drug), digits = 3)
+recid_no_parole_property <- round((nrow(filter(no_parole, offense_type == "Property" & recidivist == "Yes")) / n_no_parole_offense_property), digits = 3)
+recid_no_parole_public_order <- round((nrow(filter(no_parole, offense_type == "Public Order" & recidivist == "Yes")) / n_no_parole_offense_public_order), digits = 3)
+recid_no_parole_violent <- round((nrow(filter(no_parole, offense_type == "Violent" & recidivist == "Yes")) / n_no_parole_offense_violent), digits = 3)
+recid_no_parole_other <- round((nrow(filter(no_parole, offense_type == "Other" & recidivist == "Yes")) / n_no_parole_offense_drug), digits = 3)
+
+# offense type summary
+offense_rows <- c("Drug", "Property", "Public Order", "Violent", "Other")
+offense_no_parole_rates <- c(recid_no_parole_drug, recid_no_parole_property, recid_no_parole_public_order, recid_no_parole_violent, recid_no_parole_other)
+offense_parole_rates <- c(recid_parole_drug, recid_parole_property, recid_parole_public_order, recid_parole_violent, recid_parole_other)
+offense_summary <- data.frame(offense_rows, offense_no_parole_rates, offense_parole_rates)
+offense_summary <- mutate(offense_summary, delta = offense_parole_rates - offense_no_parole_rates)
+kable(offense_summary, caption = "Recidivism rates in non-parole / parole groups by Offense Type", col.names = c("Offense Type", "No Parole Group", "Parole Group", "Delta"))
+```
+
+```{r age_rates, echo=FALSE}
+# age - parole
+n_parole_age_under25 <- nrow(filter(parole, age == "Under 25"))
+n_parole_age_25_34 <- nrow(filter(parole, age == "25-34"))
+n_parole_age_35_44 <- nrow(filter(parole, age == "35-44"))
+n_parole_age_45_54 <- nrow(filter(parole, age == "45-54"))
+n_parole_age_55_older <- nrow(filter(parole, age == "55 and Older"))
+
+recid_parole_age_under25 <- round((nrow(filter(parole, age == "Under 25" & recidivist == "Yes")) / n_parole_age_under25), digits = 3)
+recid_parole_age_25_34 <- round((nrow(filter(parole, age == "25-34" & recidivist == "Yes")) / n_parole_age_25_34), digits = 3)
+recid_parole_age_35_44 <- round((nrow(filter(parole, age == "35-44" & recidivist == "Yes")) / n_parole_age_35_44), digits = 3)
+recid_parole_age_45_54 <- round((nrow(filter(parole, age == "45-54" & recidivist == "Yes")) / n_parole_age_45_54), digits = 3)
+recid_parole_age_55_older <- round((nrow(filter(parole, age == "55 and Older" & recidivist == "Yes")) / n_parole_age_55_older), digits = 3)
+
+# age - no parole
+n_no_parole_age_under25 <- nrow(filter(no_parole, age == "Under 25"))
+n_no_parole_age_25_34 <- nrow(filter(no_parole, age == "25-34"))
+n_no_parole_age_35_44 <- nrow(filter(no_parole, age == "35-44"))
+n_no_parole_age_45_54 <- nrow(filter(no_parole, age == "45-54"))
+n_no_parole_age_55_older <- nrow(filter(no_parole, age == "55 and Older"))
+
+recid_no_parole_age_under25 <- round((nrow(filter(no_parole, age == "Under 25" & recidivist == "Yes")) / n_no_parole_age_under25), digits = 3)
+recid_no_parole_age_25_34 <- round((nrow(filter(no_parole, age == "25-34" & recidivist == "Yes")) / n_no_parole_age_25_34), digits = 3)
+recid_no_parole_age_35_44 <- round((nrow(filter(no_parole, age == "35-44" & recidivist == "Yes")) / n_no_parole_age_35_44), digits = 3)
+recid_no_parole_age_45_54 <- round((nrow(filter(no_parole, age == "45-54" & recidivist == "Yes")) / n_no_parole_age_45_54), digits = 3)
+recid_no_parole_age_55_older <- round((nrow(filter(no_parole, age == "55 and Older" & recidivist == "Yes")) / n_no_parole_age_55_older), digits = 3)
+
+# age summary
+age_rows <- c("Under 25", "25-34", "35-44", "44-54", "55 and Older")
+age_no_parole_rates <- c(recid_no_parole_age_under25, recid_no_parole_age_25_34, recid_no_parole_age_35_44, recid_no_parole_age_45_54, recid_no_parole_age_55_older)
+age_parole_rates <- c(recid_parole_age_under25, recid_parole_age_25_34, recid_parole_age_35_44, recid_parole_age_45_54, recid_parole_age_55_older)
+age_summary <- data.frame(age_rows, age_no_parole_rates, age_parole_rates)
+age_summary <- mutate(age_summary, delta = age_parole_rates - age_no_parole_rates)
+kable(age_summary, caption = "Recidivism rates for non-parole / parole groups by age", col.names = c("Age Range", "Non-parole", "Parole", "Delta"))
+```
+
+```{r ethnicity_rates, echo=FALSE}
+# ethnicity - parole
+
+n_parole_native_hispanic <- nrow(filter(parole, ethnicity == "American Indian or Alaska Native - Hispanic"))
+n_parole_native_nonhispanic <- nrow(filter(parole, ethnicity == "American Indian or Alaska Native - Non-Hispanic"))
+n_parole_asian_hispanic <- nrow(filter(parole, ethnicity == "Asian or Pacific Islander - Hispanic"))
+n_parole_asian_nonhispanic <- nrow(filter(parole, ethnicity == "Asian or Pacific Islander - Non-Hispanic"))
+n_parole_black_hispanic <- nrow(filter(parole, ethnicity == "Black - Hispanic"))
+n_parole_black_nonhispanic <- nrow(filter(parole, ethnicity == "Black - Non-Hispanic"))
+n_parole_white_hispanic <- nrow(filter(parole, ethnicity == "White - Hispanic"))
+n_parole_white_nonhispanic <- nrow(filter(parole, ethnicity == "White - Non-Hispanic"))
+
+recid_parole_native_hispanic <- round((nrow(filter(parole, ethnicity == "American Indian or Alaska Native - Hispanic" & recidivist == "Yes")) / n_parole_native_hispanic), digits = 3)
+recid_parole_native_nonhispanic <- round((nrow(filter(parole, ethnicity == "American Indian or Alaska Native - Non-Hispanic" & recidivist == "Yes")) / n_parole_native_nonhispanic), digits = 3)
+recid_parole_asian_hispanic <- round((nrow(filter(parole, ethnicity == "Asian or Pacific Islander - Hispanic" & recidivist == "Yes")) / n_parole_asian_hispanic), digits = 3)
+recid_parole_asian_nonhispanic <- round((nrow(filter(parole, ethnicity == "Asian or Pacific Islander - Non-Hispanic" & recidivist == "Yes")) / n_parole_asian_nonhispanic), digits = 3)
+recid_parole_black_hispanic <- round((nrow(filter(parole, ethnicity == "Black - Hispanic" & recidivist == "Yes")) / n_parole_black_hispanic), digits = 3)
+recid_parole_black_nonhispanic <- round((nrow(filter(parole, ethnicity == "Black - Non-Hispanic" & recidivist == "Yes")) / n_parole_black_nonhispanic), digits = 3)
+recid_parole_white_hispanic <- round((nrow(filter(parole, ethnicity == "White - Hispanic" & recidivist == "Yes")) / n_parole_white_hispanic), digits = 3)
+recid_parole_white_nonhispanic <- round((nrow(filter(parole, ethnicity == "White - Non-Hispanic" & recidivist == "Yes")) / n_parole_white_nonhispanic), digits = 3)
+
+# ethnicity - no parole
+
+n_no_parole_native_hispanic <- nrow(filter(no_parole, ethnicity == "American Indian of Alaska Native - Hispanic"))
+n_no_parole_native_nonhispanic <- nrow(filter(no_parole, ethnicity == "American Indian of Alaska Native - Non-Hispanic"))
+n_no_parole_asian_hispanic <- nrow(filter(no_parole, ethnicity == "Asian or Pacific Islander - Hispanic"))
+n_no_parole_asian_nonhispanic <- nrow(filter(no_parole, ethnicity == "Asian or Pacific Islander - Non-Hispanic"))
+n_no_parole_black_hispanic <- nrow(filter(no_parole, ethnicity == "Black - Hispanic"))
+n_no_parole_black_nonhispanic <- nrow(filter(no_parole, ethnicity == "Black - Non-Hispanic"))
+n_no_parole_white_hispanic <- nrow(filter(no_parole, ethnicity == "White - Hispanic"))
+n_no_parole_white_nonhispanic <- nrow(filter(no_parole, ethnicity == "White - Non-Hispanic"))
+
+recid_no_parole_native_hispanic <- round((nrow(filter(no_parole, ethnicity == "American Indian of Alaska Native - Hispanic" & recidivist == "Yes")) / n_parole_native_hispanic), digits = 3)
+recid_no_parole_native_nonhispanic <- round((nrow(filter(no_parole, ethnicity == "American Indian of Alaska Native - Non-Hispanic" & recidivist == "Yes")) / n_parole_native_nonhispanic), digits = 3)
+recid_no_parole_asian_hispanic <- round((nrow(filter(no_parole, ethnicity == "Asian or Pacific Islander - Hispanic" & recidivist == "Yes")) / n_parole_asian_hispanic), digits = 3)
+recid_no_parole_asian_nonhispanic <- round((nrow(filter(no_parole, ethnicity == "Asian or Pacific Islander - Non-Hispanic" & recidivist == "Yes")) / n_parole_asian_nonhispanic), digits = 3)
+recid_no_parole_black_hispanic <- round((nrow(filter(no_parole, ethnicity == "Black - Hispanic" & recidivist == "Yes")) / n_parole_black_hispanic), digits = 3)
+recid_no_parole_black_nonhispanic <- round((nrow(filter(no_parole, ethnicity == "Black - Non-Hispanic" & recidivist == "Yes")) / n_parole_black_nonhispanic), digits = 3)
+recid_no_parole_white_hispanic <- round((nrow(filter(no_parole, ethnicity == "White - Hispanic" & recidivist == "Yes")) / n_parole_white_hispanic), digits = 3)
+recid_no_parole_white_nonhispanic <- round((nrow(filter(no_parole, ethnicity == "White - Non-Hispanic" & recidivist == "Yes")) / n_parole_white_nonhispanic), digits = 3)
+
+# ethnicity summary
+ethnicity_rows <- c("American Indian of Alaska Native - Hispanic", "American Indian of Alaska Native - Non-Hispanic", "Asian or Pacific Islander - Hispanic", "Asian or Pacific Islander - Non-Hispanic", "Black - Hispanic", "Black - Non-Hispanic", "White - Hispanic", "White - Non-Hispanic")
+ethnicity_no_parole_rates <- c(recid_no_parole_native_hispanic, recid_no_parole_native_nonhispanic, recid_no_parole_asian_hispanic, recid_no_parole_asian_nonhispanic, recid_no_parole_black_hispanic, recid_no_parole_black_nonhispanic, recid_no_parole_white_hispanic, recid_no_parole_white_nonhispanic)
+ethnicity_parole_rates <- c(recid_parole_native_hispanic, recid_parole_native_nonhispanic, recid_parole_asian_hispanic, recid_parole_asian_nonhispanic, recid_parole_black_hispanic, recid_parole_black_nonhispanic, recid_parole_white_hispanic, recid_parole_white_nonhispanic)
+ethnicity_summary <- data.frame(ethnicity_rows, ethnicity_no_parole_rates, ethnicity_parole_rates)
+ethnicity_summary <- mutate(ethnicity_summary, delta = ethnicity_parole_rates - ethnicity_no_parole_rates)
+kable(ethnicity_summary, caption = "Recidivism rates for non-parole / parole groups by ethnicity", col.names = c("Ethnicity", "Non-parole", "Parole", "Delta"))
+
+```
+
+
