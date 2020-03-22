@@ -19,7 +19,7 @@ Using parole as a treatment compared to a non-paroled control group, 3-year reci
 
 ## Introduction
 
-The question of how to reduce recidivism in prisoners is of significant interest to those who study justice and prison systems. Reducing recidivism means reducing both the costs associated with prison systems, and the social impact on the victims of crimes, the families of prisoners, and prisoners themselves. This analysis approaches the question of what factors affect recidivism by investigating the role of parole - are paroled prisoners more or less likely to be recidivists, and if so is the difference significant?
+The question of how to reduce recidivism in prisoners is of significant interest to those who study justice and prison systems: reducing recidivism means reducing both the costs associated with prison systems, and the social impact on the victims of crimes, the families of prisoners, and prisoners themselves. This analysis approaches the question of which factors affect recidivism by investigating the role of parole - are paroled prisoners more or less likely to be recidivists?
 
 ## The Dataset
 
@@ -37,7 +37,7 @@ names(recidivism_data)[names(recidivism_data) == "Fiscal.Year.Released"] <- "rel
 names(recidivism_data)[names(recidivism_data) == "Sex"] <- "sex"
 ```
 
-The chosen dataset gives 3-year recidivism for 26,020 prisoners in Iowa released during their prison system's 2010-2015 fiscal years. 3-year recidivism  means, e.g., if the prisoner was released in 2011, a follow-up was done in 2014 to see if they'd been readmitted to prison at any point since release. The dataset is provided by the Government of Iowa and was originally found on Kaggle - links to both webpages are in the appendix.
+The chosen dataset gives 3-year recidivism for 26,020 prisoners in Iowa released during their prison system's 2010-2015 fiscal years. 3-year recidivism  means, e.g., if the prisoner was released in 2011, a follow-up was done in 2014 to see if they'd been readmitted to prison at any point since release. The dataset is provided by the Government of Iowa and was originally found on Kaggle - links to both webpages are in appendix A.
 
 The dataset contains the following variables of interest. Most were renamed from their original names for convenience.
 
@@ -112,7 +112,7 @@ To attempt to establish internal validity, it's important to show that the two g
 
 **Release Year:** It would be ideal to have identical distributions for release year between the two groups, as there may have been policy changes regarding parole, or even new laws that made recidivism more or less likely - but these are unknown to us without significant research and resources.
 
-```{r release_plot, echo=FALSE, fig.height=3}
+```{r release_plot, echo=FALSE, fig.height=2}
 # distribution: release year
 recidivism_data$release_year <- as.factor(recidivism_data$release_year)
 
@@ -140,7 +140,7 @@ recidivism_data <- recidivism_data <- filter(recidivism_data, release_year == "2
 
 ```
 
-```{r release_plot_2, echo=FALSE, fig.height=3}
+```{r release_plot_2, echo=FALSE, fig.height=2}
 # distribution: release year
 recidivism_data$release_year <- as.factor(recidivism_data$release_year)
 
@@ -278,19 +278,19 @@ The chi-squared test resulted in:
 * chi-squared: 84.99
 * p value < 2.2 * 10^-22. 
 
-Using the standard practice of considering p = 0.05 thecut off for significance, the null hypothesis is rejected: there is a statistically significant increase in 3-year recidivism rates in the parole group over the non-parole group.
+Using the standard practice of considering p = 0.05 the cut off for significance, the null hypothesis is rejected: there is a statistically significant increase in 3-year recidivism rates in the parole group over the non-parole group.
 
-For some additional insight, recidivism rates for the levels of each of the variables of interest was also calculated. However it should be noted that further splitting the groups into subgroups based on these variables likely invalidates the assumption that the subgroups are relatively homogenous. Appendix B summarizes these findings for interest's sake.
+Recidivism rates for the levels of each of the variables of interest was also calculated for intere's sake, though these subgroups likely have significant internal validation issues. Appendix B summarizes these findings.
 
 ## Discussion
 
-The analysis above led to the null hypothesis being rejected, i.e. a statistically significant increase in 3-year recidivism rates in the parole group over the non-parole group was found. This suggests that parolees are at higher risk for recidivism compared to prisoners serving their full sentence. The reasons for this are not well understood, but it may be because parole sends the signal that crimes 
+The analysis led to the null hypothesis being rejected, i.e. a statistically significant increase in 3-year recidivism rates in the parole group over the non-parole group was found. This suggests that parolees are at higher risk for recidivism compared to prisoners serving their full sentence. The reasons for this are not well understood, but it may be because parole sends the signal that full sentences are typically not enforced, making it worth the risk to commit additional crimes. 
 
 That said, there was one significant concern regarding internal validity: the distribution of offense types of the two groups were not comparable. This is a weakness of the analysis, as the type of offense can affect both the probability of parole and the probability of recidivism (and possibly other aspects in the experiment context as well).
 
 ### External Validity
 
-Given that this data represents only a few years' worth of prisoners from a single prison system in the United States, it's hard to argue that this analysis has strong external validity. There are many possible factors that affect the probability of a prisoner re-committing crime, some of which are related to the justice/prison system itself, and others to the society at large. For instance, prisoners in a system more focused on rehabilitation, or without the proft motive found in the US prison system, may have different results. 
+Given that this data represents only a few years' worth of prisoners from a single prison system in the United States, it's hard to argue that this analysis has strong external validity. There are many possible factors that affect the probability of a prisoner re-committing crime, some of which are related to the justice/prison system itself, and others to the society at large. For example, prisoners in a system more focused on rehabilitation, or without the proft motive found in the US prison system, may have different results. 
 
 There are also a number factors to consider regarding the personal circumstances of the parolee, e.g.: do they have employment and a social support network? These factors have the potential to play a large role in determining individual outcomes, but were not considered in this analysis.
 
@@ -337,15 +337,17 @@ Had an experiment using parole as treatment been carried out prior as part of th
 
 ### The Dataset
 
-Courtesy of the Government of Iowa:
+**Courtesy of the Government of Iowa:**
+
 [3-Year Recidivism for Offenders Released from Prison in Iowa](https://data.iowa.gov/Correctional-System/3-Year-Recidivism-for-Offenders-Released-from-Pris/mw8r-vqy4)
 
-Kaggle page where the dataset was originally found:
+**Kaggle page where the dataset was originally found:**
+
 [Recidivism for Offenders Released from Prison](https://www.kaggle.com/slonnadube/recidivism-for-offenders-released-from-prison#3-Year_Recidivism_for_Offenders_Released_from_Prison_in_Iowa_elaborated.csv)
 
-### Full script for reproducibility
+### Full code for reproducibility
 
-Link to GitHub repository:
+[Click here for link to GitHub repository](https://github.com/quanras/INF2178-Problem-Set-4)
 
 \newpage
 
