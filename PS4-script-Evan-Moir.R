@@ -150,6 +150,12 @@ summary <- mutate(summary, delta = recid_rate_parole - recid_rate_no_parole)
 kable(summary, caption = "Parole rates - full smaple", col.names = c("Non-parole", "Parole", "Delta"))
 
 # chi squared test
+chi_col1 <- c("Non-recidivist", "Recidivist", "Total")
+chi_col2 <- c((n_no_parole - n_no_parole_recidivist), n_no_parole_recidivist, n_no_parole)
+chi_col3 <- c((n_parole - n_parole_recividist), n_parole_recividist, n_parole)
+chi_col4 <- c(((n_no_parole - n_no_parole_recidivist) + (n_parole - n_parole_recividist)), (n_parole_recividist + n_no_parole_recidivist), nrow(recidivism_data))
+chi_table <- data.frame(chi_col1, chi_col2, chi_col3, chi_col4)
+kable(chi_table, caption = "Frequency matrix for chi-squared test", col.names = c("", "Non-Parole", "Parole", "Total"))
 
 chisq.test(recidivism_data$parole, recidivism_data$recidivist) %>% tidy()
 

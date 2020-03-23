@@ -140,7 +140,7 @@ recidivism_data <- recidivism_data <- filter(recidivism_data, release_year == "2
 
 ```
 
-```{r release_plot_2, echo=FALSE, fig.height=2}
+```{r release_plot_2, echo=FALSE, fig.height=3}
 # distribution: release year
 recidivism_data$release_year <- as.factor(recidivism_data$release_year)
 
@@ -159,7 +159,7 @@ ggplot(data = recidivism_data) +
 
 **Age:** Similar distributions here are important here, as there may be age-related bias inherent in the justice/prison system.
 
-```{r age_plot, echo=FALSE, fig.height=3}
+```{r age_plot, echo=FALSE, fig.height=4}
 # distribution: age
 ggplot(data = recidivism_data) +
     geom_bar(
@@ -268,6 +268,17 @@ kable(summary, caption = "Recidivism rates for non-parole and parole groups", co
 
 This suggests that paroled prisoners have a higher recidivism rate than non-paroled prisoners. But is this difference significant? To answer this, a chi-squared test is performed using the parole variable as the treatment and recidivism as the outcome variables. The chi-squared test compares the observed frequencies of recidivism in the two groups to their expected frequencies to evaluate how likely the observed frequencies would be assuming the null hypothesis is true.
 
+The frequencies used in calculating the chi-squared test are shown in table 2
+
+```{r chi_table, echo=FALSE}
+chi_col1 <- c("Non-recidivist", "Recidivist", "Total")
+chi_col2 <- c((n_no_parole - n_no_parole_recidivist), n_no_parole_recidivist, n_no_parole)
+chi_col3 <- c((n_parole - n_parole_recividist), n_parole_recividist, n_parole)
+chi_col4 <- c(((n_no_parole - n_no_parole_recidivist) + (n_parole - n_parole_recividist)), (n_parole_recividist + n_no_parole_recidivist), nrow(recidivism_data))
+chi_table <- data.frame(chi_col1, chi_col2, chi_col3, chi_col4)
+kable(chi_table, caption = "Frequency matrix for chi-squared test", col.names = c("", "Non-Parole", "Parole", "Total"))
+```
+
 ```{r chi_test, eval=FALSE, include=FALSE}
 # chi squared test
 chisq.test(recidivism_data$parole, recidivism_data$recidivist)
@@ -288,9 +299,9 @@ The analysis led to the null hypothesis being rejected, i.e. a statistically sig
 
 That said, there was one significant concern regarding internal validity: the distribution of offense types of the two groups were not comparable. This is a weakness of the analysis, as the type of offense can affect both the probability of parole and the probability of recidivism (and possibly other aspects in the experiment context as well).
 
-### External Validity
+It should also be noted that the data does not include any information on the criteria used in parole decisions. Because of this, there are unobserved variables at play.
 
-Given that this data represents only a few years' worth of prisoners from a single prison system in the United States, it's hard to argue that this analysis has strong external validity. There are many possible factors that affect the probability of a prisoner re-committing crime, some of which are related to the justice/prison system itself, and others to the society at large. For example, prisoners in a system more focused on rehabilitation, or without the proft motive found in the US prison system, may have different results. 
+Given that this data represents only a few years' worth of prisoners from a single prison system, it's hard to argue that this analysis has strong external validity. There are many possible factors that affect the probability of a prisoner re-committing crime, some of which are related to the justice/prison system itself, and others to the society at large. For example, prisoners in a system more focused on rehabilitation, or without the proft motive found in the US prison system, may have different results. 
 
 There are also a number factors to consider regarding the personal circumstances of the parolee, e.g.: do they have employment and a social support network? These factors have the potential to play a large role in determining individual outcomes, but were not considered in this analysis.
 
@@ -299,6 +310,7 @@ A follow-up analysis seeking to improve internal and external validity could foc
 * Restrict the number of offense types under consideration, e.g. exclude violent crimes.
 * Investigate jurisdiction-specific factors relating to how parole is granted. 
 * Measure aspects of parolees' personal employment situation and support network, e.g. what type of work and housing are available to them during parole.
+* Include data on the considerations used in making parole decisions.
 
 ## Conclusion
 
@@ -314,9 +326,11 @@ There are significant ethical considerations anytime a prison system is discusse
 
 The definition of the ethnicity categories is of significant concern. Ethnicity is a slippery concept that is not well defined biologically or in any socially universal sense - it tends to be vary significantly depending on the cultural context in which it's being discussed. For example: why are all of the categories appended with "hispanic" or "non-hispanic"? This speaks to a specifically American viewpoint of ethnicity. 
 
-Particularly given that backdrop, there are ethical considerations to even attempting to collect ethnicity as part of a dataset. It has the potential to bias anyone making decisions using the data.
+Particularly given that backdrop, there are ethical considerations to even attempting to collect ethnicity as part of a dataset. It has the potential to bias anyone making decisions using the data. IT's intended use in this data is not known.
 
 The same could be true of sex, e.g. male and female prisoners could be treated differently because of unknown biases on the part of the decision-makers. In addition, this dataset has a very binary view of sex. Even if sex is intended in the biological sense (rather than gender), the modern scientific view of sex is not a strict binary. It's unclear what there is to gain from including this as a variable.
+
+Presumably (though not known for sure) prisoners in the dataset are not consenting to their inclusion in this data. In most discussions of ethical data collection, consent plays a big part. While there may be positive intentions behind the collection of the data, and it maybe important for helping future prisoners, the fact that it's unlikely prisoners gave consent remains a concern.
 
 ### Regarding experimental design
 
